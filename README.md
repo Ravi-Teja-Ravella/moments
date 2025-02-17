@@ -24,7 +24,7 @@ $ pdm install
 ```
 
 > [!TIP]
-> If you don't have PDM installed, you can create a virtual environment with `venv` and install dependencies with `pip install -r requirements.txt`. If any dependency doesn't get installed when you run the above command, try installing those commands manually (`pip instal ....`).
+> If you don't have PDM installed, you can create a virtual environment with `venv` and install dependencies with `pip install -r requirements.txt`. If any dependency doesn't get installed when you run the above command, try installing those commands manually (`pip install ....`).
 
 To initialize the app, run the `flask init-app` command:
 
