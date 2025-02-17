@@ -399,3 +399,5 @@ def delete_photos(**kwargs):
         path = current_app.config['MOMENTS_UPLOAD_PATH'] / filename
         if path.exists():  # not every filename map a unique file
             path.unlink()
+
+

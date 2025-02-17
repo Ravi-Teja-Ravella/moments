@@ -2,12 +2,18 @@ from flask import Blueprint, abort, current_app, flash, redirect, render_templat
 from flask_login import current_user, login_required
 from sqlalchemy import func, select
 from sqlalchemy.orm import with_parent
+from flask_wtf.csrf import generate_csrf
+import requests
+import os
+
 
 from moments.core.extensions import db
 from moments.decorators import confirm_required, permission_required
 from moments.forms.main import CommentForm, DescriptionForm, TagForm
 from moments.models import Collection, Comment, Follow, Notification, Photo, Tag, User
 from moments.notifications import push_collect_notification, push_comment_notification
+from moments.API import generate_caption_and_tags
+
 from moments.utils import flash_errors, redirect_back, rename_image, resize_image, validate_image
 
 main_bp = Blueprint('main', __name__)
@@ -47,25 +53,56 @@ def explore():
     return render_template('main/explore.html', photos=photos)
 
 
+from flask import render_template, request, current_app, flash, redirect
+from sqlalchemy.orm import selectinload
+from sqlalchemy import select
+from moments.models import User, Tag, Photo, db, photo_tag  
+
 @main_bp.route('/search')
 def search():
-    q = request.args.get('q').strip()
+    q = request.args.get('q', '').strip()
     if not q:
-        flash('Enter keyword about photo, user or tag.', 'warning')
-        return redirect_back()
+        flash('Enter a keyword about photo, user, or tag.', 'warning')
+        return redirect(request.referrer)
 
     category = request.args.get('category', 'photo')
     page = request.args.get('page', 1, type=int)
     per_page = current_app.config['MOMENTS_SEARCH_RESULT_PER_PAGE']
-    # TODO: add SQLAlchemy 2.x support to Flask-Whooshee then update the following code
+
+    tag_photo_counts = {}  
+
     if category == 'user':
         pagination = User.query.whooshee_search(q).paginate(page=page, per_page=per_page)
+        results = pagination.items
+
     elif category == 'tag':
         pagination = Tag.query.whooshee_search(q).paginate(page=page, per_page=per_page)
-    else:
+        results = pagination.items
+
+        
+        tag_photo_counts = {
+            tag.id: db.session.scalar(
+                select(func.count(Photo.id))
+                .join(photo_tag)
+                .where(photo_tag.c.tag_id == tag.id)
+            ) for tag in results
+        }
+
+    else: 
         pagination = Photo.query.whooshee_search(q).paginate(page=page, per_page=per_page)
-    results = pagination.items
-    return render_template('main/search.html', q=q, results=results, pagination=pagination, category=category)
+        results = pagination.items
+
+    return render_template(
+        'main/search.html',
+        q=q,
+        results=results,
+        pagination=pagination,
+        category=category,
+        photos=Photo.query.all(),  
+        tag_photo_counts=tag_photo_counts  
+    )
+
+
 
 
 @main_bp.route('/notifications')
@@ -138,6 +175,7 @@ def upload():
         )
         db.session.add(photo)
         db.session.commit()
+        add_default_metadata(photo.id)
     return render_template('main/upload.html')
 
 
@@ -426,3 +464,53 @@ def delete_tag(photo_id, tag_id):
 
     flash('Tag deleted.', 'info')
     return redirect(url_for('.show_photo', photo_id=photo_id))
+
+def add_default_metadata(photo_id):
+    """Generates metadata for a photo using Azure Vision API and updates it."""
+    base_url = request.host_url.rstrip('/')
+    
+    # Query the database to get the actual file name for the photo
+    photo = db.session.get(Photo, photo_id)
+    if not photo:
+        print(f"Photo with ID {photo_id} not found.")
+        return
+    
+    local_image_path = os.path.join(current_app.config['MOMENTS_UPLOAD_PATH'], photo.filename)  # Get the file path
+
+    try:
+        # Log the local image path for debugging
+        print(f"Using local image path: {local_image_path}")
+
+        # Call Azure Vision API to generate caption and tags
+        caption, tags = generate_caption_and_tags(local_image_path)
+
+        # Check if a valid caption was generated
+        if not caption or caption == "No caption generated":
+            print("No valid caption generated. Skipping metadata update.")
+            return
+
+        # Update description with the caption
+        desc_data = {"description": caption}
+        desc_url = f"{base_url}/photo/{photo_id}/description"
+        desc_response = requests.post(
+            desc_url,
+            data=desc_data,
+            headers={"X-CSRFToken": generate_csrf()},
+            cookies=request.cookies,
+        )
+        print(f"Description Response: {desc_response.status_code}, {desc_response.text}")
+
+        # Update tags with the first two generated tags
+        for tag in tags:
+            tag_data = {"tag": tag}
+            tag_url = f"{base_url}/photo/{photo_id}/tag/new"
+            tag_response = requests.post(
+                tag_url,
+                data=tag_data,
+                headers={"X-CSRFToken": generate_csrf()},
+                cookies=request.cookies,
+            )
+            print(f"Tag Response: {tag_response.status_code}, {tag_response.text}")
+
+    except Exception as e:
+        print(f"Error in add_default_metadata: {str(e)}")
