@@ -472,7 +472,7 @@ def add_default_metadata(photo_id):
     # Query the database to get the actual file name for the photo
     photo = db.session.get(Photo, photo_id)
     if not photo:
-        print(f"Photo with ID {photo_id} not found.")
+        print(f"Photo ID {photo_id} not found.")
         return
     
     local_image_path = os.path.join(current_app.config['MOMENTS_UPLOAD_PATH'], photo.filename)  # Get the file path
@@ -486,7 +486,7 @@ def add_default_metadata(photo_id):
 
         # Check if a valid caption was generated
         if not caption or caption == "No caption generated":
-            print("No valid caption generated. Skipping metadata update.")
+            print("No valid caption generated.")
             return
 
         # Update description with the caption

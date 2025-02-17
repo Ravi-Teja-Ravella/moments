@@ -1,3 +1,4 @@
+
 # Moments
 
 A photo sharing social networking app with automated description and tags generation built with Python and Flask. The example application for the book *[Python Web Development with Flask (2nd edition)](https://helloflask.com/en/book/4)* (《[Flask Web 开发实战（第 2 版）](https://helloflask.com/book/4)》).
@@ -24,7 +25,7 @@ $ pdm install
 ```
 
 > [!TIP]
-> If you don't have PDM installed, you can create a virtual environment with `venv` and install dependencies with `pip install -r requirements.txt`. If any dependency doesn't get installed when you run the above command, try installing those commands manually (`pip instal ....`).
+> If you don't have PDM installed, you can create a virtual environment with `venv` and install dependencies with `pip install -r requirements.txt`. If any dependency doesn't get installed when you run the above command, try installing those commands manually (`pip install ....`).
 
 To initialize the app, run the `flask init-app` command:
 
